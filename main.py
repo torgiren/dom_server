@@ -46,17 +46,28 @@ def process_przedpokoj(msg):
         print("oneshot")
         if timers.get('przedpokoj_5') in s.queue:
             s.cancel(timers.get('przedpokoj_5'))
-        s.enter(0, 1, client.publish, argument=("domek/przedpokoj/in","set:4:0"))
         t = int(msg.payload.decode().split(':')[-1])
         print(t)
         s.enter(0, 1, client.publish, argument=("domek/przedpokoj/in","set:4:0"))
         timers['przedpokoj_5'] = s.enter(t, 1, client.publish, argument=("domek/przedpokoj/in","set:4:1"))
 
 s = sched.scheduler(time.time, time.sleep)
-threading.Thread(target=scheduler_loop).start()
+
+from bottle import route, run, template
 
 client = mqtt.Client()
-client.connect("192.168.0.25", 1883, 60)
 client.on_connect = on_connect
 client.on_message = on_message
-client.loop_forever()
+client.connect("192.168.0.25", 1883, 60)
+
+threading.Thread(target=client.loop_forever).start()
+threading.Thread(target=scheduler_loop).start()
+
+@route('/one/')
+@route('/one')
+def url_one():
+    print("one")
+    client.publish("domek/przedpokoj/out","oneshot:5:2")
+    return "asd"
+
+run(host='0.0.0.0', port=8080)
