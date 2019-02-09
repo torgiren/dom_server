@@ -1,6 +1,19 @@
 #!/usr/bin/env python
 import paho.mqtt.client as mqtt
+import time
+import sched
+import threading
 
+sched_run = True
+
+timers = {}
+output_disabled = {}
+
+def scheduler_loop():
+    while sched_run:
+        print("Sched loop", time.time(), s.queue)
+        s.run(blocking=False)
+        time.sleep(1)
 def on_connect(client, userdata, flags, rc):
     print("Connected")
     client.subscribe("domek/+/out")
@@ -8,13 +21,29 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     print("Got: " + str(msg.payload))
     if msg.topic == "domek/przedpokoj/out":
-        print("Z domku")
-        if msg.payload.decode() == "new:5:1":
-            print("Wlacz")
-            client.publish("domek/przedpokoj/in", "set:4:0")
-        elif msg.payload.decode() == "new:5:0":
-            print("Wylacz")
-            client.publish("domek/przedpokoj/in", "set:4:1")
+        process_przedpokoj(msg)
+
+def process_przedpokoj(msg):
+    print("Z domku")
+    if msg.payload.decode() == "new:5:1":
+        print("Wlacz")
+        if not output_disabled.get("przedpokoj_5"):
+            s.enter(0, 1, client.publish, argument=("domek/przedpokoj/in", "set:4:0"))
+            if timers.get('przedpokoj_5') in s.queue:
+                s.cancel(timers.get('przedpokoj_5'))
+    elif msg.payload.decode() == "new:5:0":
+        print("Wylacz")
+        turn_off_time = time.time() + 5
+        if timers.get('przedpokoj_5') in s.queue:
+            if timers.get('przedpokoj_5').time < turn_off_time:
+                s.cancel(timers.get('przedpokoj_5'))
+                timers['przedpokoj_5'] = s.enterabs(turn_off_time, 1, client.publish, argument=("domek/przedpokoj/in","set:4:1"))
+        else:
+            timers['przedpokoj_5'] = s.enterabs(turn_off_time, 1, client.publish, argument=("domek/przedpokoj/in","set:4:1"))
+#       client.publish("domek/przedpokoj/in", "set:4:1")
+
+s = sched.scheduler(time.time, time.sleep)
+threading.Thread(target=scheduler_loop).start()
 
 client = mqtt.Client()
 client.connect("192.168.0.25", 1883, 60)
