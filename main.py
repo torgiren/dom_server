@@ -11,7 +11,8 @@ output_disabled = {}
 
 def scheduler_loop():
     while sched_run:
-        print("Sched loop", time.time(), s.queue)
+        if s.queue:
+            print("Sched loop", time.time(), s.queue)
         s.run(blocking=False)
         time.sleep(1)
 def on_connect(client, userdata, flags, rc):
@@ -41,6 +42,15 @@ def process_przedpokoj(msg):
         else:
             timers['przedpokoj_5'] = s.enterabs(turn_off_time, 1, client.publish, argument=("domek/przedpokoj/in","set:4:1"))
 #       client.publish("domek/przedpokoj/in", "set:4:1")
+    elif msg.payload.decode().startswith("oneshot:5:"):
+        print("oneshot")
+        if timers.get('przedpokoj_5') in s.queue:
+            s.cancel(timers.get('przedpokoj_5'))
+        s.enter(0, 1, client.publish, argument=("domek/przedpokoj/in","set:4:0"))
+        t = int(msg.payload.decode().split(':')[-1])
+        print(t)
+        s.enter(0, 1, client.publish, argument=("domek/przedpokoj/in","set:4:0"))
+        timers['przedpokoj_5'] = s.enter(t, 1, client.publish, argument=("domek/przedpokoj/in","set:4:1"))
 
 s = sched.scheduler(time.time, time.sleep)
 threading.Thread(target=scheduler_loop).start()
